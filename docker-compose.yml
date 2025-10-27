@@ -16,22 +16,23 @@ services:
     networks:
       - monitoring
 
-  # Prometheus (stockage des métriques)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: claude-prometheus
+  # VictoriaMetrics (stockage des métriques)
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:latest
+    container_name: claude-victoriametrics
     restart: unless-stopped
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data:/prometheus
+      - victoria-data:/storage
+      - ./victoriametrics-scrape.yml:/etc/victoriametrics/scrape.yml
     ports:
-      - "9090:9090"
+      - "9090:8428"  # Port standard Prometheus (8428 interne VictoriaMetrics)
     networks:
       - monitoring
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=30d'  # Garde 30 jours d'historique
+      - '--storageDataPath=/storage'
+      - '--retentionPeriod=12'  # Garde 12 mois d'historique
+      - '--httpListenAddr=:8428'
+      - '--promscrape.config=/etc/victoriametrics/scrape.yml'
 
   # Grafana (visualisation)
   grafana:
@@ -52,10 +53,10 @@ services:
     networks:
       - monitoring
     depends_on:
-      - prometheus
+      - victoriametrics
 
 volumes:
-  prometheus-data:
+  victoria-data:
   grafana-data:
 
 networks:

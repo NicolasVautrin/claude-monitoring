@@ -2,6 +2,8 @@
 
 Stack OpenTelemetry locale pour monitorer votre usage et consommation Claude Code.
 
+**Stack technique :** OpenTelemetry Collector + VictoriaMetrics + Grafana
+
 ## 📊 Qu'est-ce que c'est ?
 
 Une stack de monitoring complète pour suivre :
@@ -12,12 +14,25 @@ Une stack de monitoring complète pour suivre :
 - **Git activity** (commits, PRs)
 - **Tool usage** (accepté/rejeté)
 
+## 🔄 Pourquoi VictoriaMetrics au lieu de Prometheus ?
+
+VictoriaMetrics a été choisi pour ses avantages clés :
+
+- **Import historique** : Supporte l'import de métriques avec timestamps historiques (Prometheus ne le permet pas)
+- **Compatibilité Prometheus** : API 100% compatible, drop-in replacement
+- **Performance** : Jusqu'à 20x plus rapide et utilise moins de RAM
+- **Compression** : Consomme 7x moins d'espace disque
+- **Simplicité** : Un seul binaire vs multiples composants Prometheus
+
+Cette stack peut importer tout votre historique de conversations Claude Code (~/.claude/projects/) pour avoir des métriques rétroactives complètes.
+
 ## ✨ Fonctionnalités
 
 - ✅ **100% local** : Aucune donnée envoyée sur internet
 - ✅ **Prêt à l'emploi** : Dashboard Grafana pré-configuré
 - ✅ **Léger** : ~100 MB RAM, ~50 MB disque (hors données)
-- ✅ **Historique** : 30 jours de métriques conservées
+- ✅ **Historique** : 12 mois de métriques conservées
+- ✅ **Import historique** : Importe vos conversations passées (tokens, coûts)
 - ✅ **Open Source** : Stack complète gratuite
 
 ## 🚀 Quick Start
@@ -149,8 +164,8 @@ echo $CLAUDE_CODE_ENABLE_TELEMETRY
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| **Grafana** | http://localhost:3000 | admin / admin |
-| **Prometheus** | http://localhost:9090 | - |
+| **Grafana** | http://localhost:3000 | Accès anonyme (pas de login) |
+| **VictoriaMetrics** | http://localhost:9090 | - |
 
 ## 📈 Utilisation
 
@@ -161,9 +176,9 @@ echo $CLAUDE_CODE_ENABLE_TELEMETRY
 3. Le dashboard "Claude Code Usage" devrait apparaître automatiquement
 4. Sélectionner votre période de temps en haut à droite
 
-### Prometheus (requêtes brutes)
+### VictoriaMetrics (requêtes brutes)
 
-Exemples de requêtes PromQL :
+VictoriaMetrics est 100% compatible avec l'API Prometheus. Exemples de requêtes PromQL :
 
 **Coût total cumulé (24h)** :
 ```promql
@@ -180,23 +195,39 @@ sum by (type) (claude_code_token_usage_tokens_total)
 sum(increase(claude_code_lines_of_code_count_total[1h]))
 ```
 
+### Import de l'historique
+
+Vous pouvez importer tout votre historique de conversations Claude Code pour avoir des métriques rétroactives :
+
+```bash
+python import_claude_history.py
+```
+
+Le script parcourt `~/.claude/projects/` et :
+- Extrait tous les tokens consommés (input, output, cache)
+- Calcule les coûts par modèle
+- Préserve les timestamps originaux des conversations
+- Importe directement dans VictoriaMetrics
+
+**Note :** Seules les métriques de conversations (tokens, coûts) sont disponibles dans l'historique. Les métriques de commits Git et lignes de code ne sont générées qu'en temps réel.
+
 ## 📁 Structure du projet
 
 ```
 claude-monitoring/
 ├── docker-compose.yml                    # Stack Docker complète
-├── otel-collector-config.yaml           # Config OpenTelemetry
-├── prometheus.yml                        # Config Prometheus
+├── otel-collector-config.yaml           # Config OpenTelemetry Collector
+├── victoriametrics-scrape.yml           # Config VictoriaMetrics scraping
 ├── grafana-provisioning/                # Auto-config Grafana
 │   ├── datasources/
-│   │   └── prometheus.yaml              # Datasource Prometheus
+│   │   └── prometheus.yaml              # Datasource (pointe vers VictoriaMetrics)
 │   └── dashboards/
 │       ├── dashboards.yaml              # Provider dashboards
 │       └── claude-usage.json            # Dashboard pré-configuré
+├── import_claude_history.py             # Import de l'historique Claude Code dans VictoriaMetrics
 ├── .gitignore                           # Ignore volumes Docker
 ├── README.md                            # Ce fichier
-├── start.sh                             # Script démarrage (Linux/Mac)
-└── start.bat                            # Script démarrage (Windows)
+└── CLAUDE.md                            # Instructions pour Claude Code
 ```
 
 ## 🔧 Configuration avancée
@@ -206,8 +237,10 @@ claude-monitoring/
 Dans `docker-compose.yml`, modifier :
 ```yaml
 command:
-  - '--storage.tsdb.retention.time=30d'  # 30 jours par défaut
+  - '--retentionPeriod=12'  # 12 mois par défaut (en nombre de mois)
 ```
+
+La rétention VictoriaMetrics se configure en nombre de mois (12 = 12 mois = 1 an).
 
 ### Réduire la cardinalité (économiser l'espace)
 
@@ -253,7 +286,7 @@ Modifier `otel-collector-config.yaml` section `exporters`.
 
 4. **Relancer Claude Code** après avoir défini les variables
 
-5. **Vérifier que les métriques sont bien dans Prometheus** :
+5. **Vérifier que les métriques sont bien dans VictoriaMetrics** :
    ```bash
    curl 'http://localhost:9090/api/v1/query?query=claude_code_cost_usage_USD_total'
    ```
@@ -261,12 +294,12 @@ Modifier `otel-collector-config.yaml` section `exporters`.
 
 ### Grafana affiche "No Data"
 
-Si Prometheus a bien des données mais Grafana affiche "No Data" :
+Si VictoriaMetrics a bien des données mais Grafana affiche "No Data" :
 
-1. **Vérifier le datasource Prometheus** :
+1. **Vérifier le datasource** :
    - Aller dans Configuration > Data sources dans Grafana
    - Vérifier que le datasource "Prometheus" existe et est accessible
-   - URL doit être : `http://prometheus:9090`
+   - URL doit être : `http://victoriametrics:8428`
 
 2. **Tester une requête manuelle** :
    - Aller dans Explore dans Grafana
@@ -369,5 +402,5 @@ MIT
 
 - [Claude Code Documentation](https://docs.claude.com/en/docs/claude-code/monitoring-usage)
 - [OpenTelemetry](https://opentelemetry.io/)
-- [Prometheus](https://prometheus.io/)
+- [VictoriaMetrics](https://victoriametrics.com/)
 - [Grafana](https://grafana.com/)

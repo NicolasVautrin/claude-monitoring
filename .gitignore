@@ -18,3 +18,9 @@ Thumbs.db
 # Temporary files
 *.tmp
 .env.local
+
+# Generated metrics files
+*.prom
+
+# Claude Code history
+.claude/
