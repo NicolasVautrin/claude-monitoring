@@ -13,12 +13,11 @@ processors:
 exporters:
   prometheus:
     endpoint: "0.0.0.0:8889"
-    namespace: claude_code
     const_labels:
       environment: local
 
-  logging:
-    loglevel: info
+  debug:
+    verbosity: detailed
     sampling_initial: 5
     sampling_thereafter: 200
 
@@ -27,14 +26,14 @@ service:
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [prometheus, logging]
+      exporters: [prometheus, debug]
 
     logs:
       receivers: [otlp]
       processors: [batch]
-      exporters: [logging]
+      exporters: [debug]
 
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [logging]
+      exporters: [debug]

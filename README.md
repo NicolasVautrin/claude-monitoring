@@ -42,30 +42,108 @@ docker-compose ps
 
 ### 2. Configurer Claude Code
 
-#### Windows (PowerShell)
+Les variables d'environnement peuvent être définies de deux façons :
+
+#### Option A : Configuration permanente (recommandée)
+
+**Windows - Méthode 1 : Variables système (setx)**
 ```powershell
-# Ajouter à votre profil PowerShell ou définir à chaque session
+# Définir les variables de manière permanente (niveau utilisateur)
+setx CLAUDE_CODE_ENABLE_TELEMETRY "1"
+setx OTEL_METRICS_EXPORTER "otlp"
+setx OTEL_EXPORTER_OTLP_ENDPOINT "http://localhost:4317"
+setx OTEL_EXPORTER_OTLP_PROTOCOL "grpc"
+
+# ⚠️ IMPORTANT : Fermer et rouvrir tous les terminaux et Claude Code
+# Les variables ne seront disponibles que dans les nouvelles sessions
+```
+
+**Windows - Méthode 2 : Profil PowerShell**
+```powershell
+# Éditer votre profil PowerShell
+notepad $PROFILE
+
+# Ajouter ces lignes au fichier :
 $env:CLAUDE_CODE_ENABLE_TELEMETRY="1"
 $env:OTEL_METRICS_EXPORTER="otlp"
 $env:OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
+$env:OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
+
+# Sauvegarder et recharger le profil
+. $PROFILE
 ```
 
-#### Linux/Mac (Bash/Zsh)
+**Linux/Mac (Bash)**
 ```bash
-# Ajouter à votre ~/.bashrc ou ~/.zshrc
+# Ajouter à votre ~/.bashrc (ou ~/.zshrc si vous utilisez Zsh)
+echo 'export CLAUDE_CODE_ENABLE_TELEMETRY=1' >> ~/.bashrc
+echo 'export OTEL_METRICS_EXPORTER=otlp' >> ~/.bashrc
+echo 'export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317' >> ~/.bashrc
+echo 'export OTEL_EXPORTER_OTLP_PROTOCOL=grpc' >> ~/.bashrc
+
+# Recharger la configuration
+source ~/.bashrc
+```
+
+#### Option B : Session temporaire (pour tester)
+
+**Windows (PowerShell)**
+```powershell
+# Ces variables seront perdues à la fermeture du terminal
+$env:CLAUDE_CODE_ENABLE_TELEMETRY="1"
+$env:OTEL_METRICS_EXPORTER="otlp"
+$env:OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
+$env:OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
+```
+
+**Linux/Mac**
+```bash
+# Ces variables seront perdues à la fermeture du terminal
 export CLAUDE_CODE_ENABLE_TELEMETRY=1
 export OTEL_METRICS_EXPORTER=otlp
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 ```
 
-**Optionnel** : Logger les prompts
+#### Variables optionnelles
+
+**Logger les prompts utilisateur** (⚠️ données sensibles) :
 ```bash
+# Windows
+$env:OTEL_LOG_USER_PROMPTS="1"
+
+# Linux/Mac
 export OTEL_LOG_USER_PROMPTS=1
+```
+
+#### Vérifier la configuration
+
+```bash
+# Windows
+echo $env:CLAUDE_CODE_ENABLE_TELEMETRY
+echo $env:OTEL_EXPORTER_OTLP_ENDPOINT
+
+# Linux/Mac
+echo $CLAUDE_CODE_ENABLE_TELEMETRY
+echo $OTEL_EXPORTER_OTLP_ENDPOINT
 ```
 
 ### 3. Redémarrer Claude Code
 
-Fermez et relancez Claude Code pour que les variables d'environnement soient prises en compte.
+**IMPORTANT** : Les variables d'environnement ne sont chargées qu'au démarrage d'un processus.
+
+- **Si vous utilisez Claude Code en ligne de commande** : Fermez et rouvrez votre terminal, puis relancez Claude Code
+- **Si vous utilisez Claude Code dans un IDE** (IntelliJ, VS Code, etc.) : Redémarrez complètement l'IDE
+- **Si vous avez utilisé `setx` sur Windows** : Fermez tous les terminaux et applications, puis relancez-les
+
+Pour vérifier que les variables sont bien chargées avant de lancer Claude Code :
+```bash
+# Windows
+echo $env:CLAUDE_CODE_ENABLE_TELEMETRY
+
+# Linux/Mac
+echo $CLAUDE_CODE_ENABLE_TELEMETRY
+```
 
 ### 4. Accéder aux interfaces
 
@@ -89,22 +167,22 @@ Exemples de requêtes PromQL :
 
 **Coût total cumulé (24h)** :
 ```promql
-sum(increase(claude_code_cost_usage_total[24h]))
+sum(increase(claude_code_cost_usage_USD_total[24h]))
 ```
 
 **Tokens par type** :
 ```promql
-sum by (token_type) (claude_code_token_usage_total)
+sum by (type) (claude_code_token_usage_tokens_total)
 ```
 
 **Sessions actives** :
 ```promql
-claude_code_session_count
+claude_code_session_count_total
 ```
 
 **Lignes de code modifiées (1h)** :
 ```promql
-sum(increase(claude_code_lines_modified_total[1h]))
+sum(increase(claude_code_lines_of_code_count_total[1h]))
 ```
 
 ## 📁 Structure du projet
@@ -180,6 +258,35 @@ Modifier `otel-collector-config.yaml` section `exporters`.
 
 4. **Relancer Claude Code** après avoir défini les variables
 
+5. **Vérifier que les métriques sont bien dans Prometheus** :
+   ```bash
+   curl 'http://localhost:9090/api/v1/query?query=claude_code_cost_usage_USD_total'
+   ```
+   Si cette commande retourne des données mais Grafana affiche "No Data", le problème vient du dashboard Grafana.
+
+### Grafana affiche "No Data"
+
+Si Prometheus a bien des données mais Grafana affiche "No Data" :
+
+1. **Vérifier le datasource Prometheus** :
+   - Aller dans Configuration > Data sources dans Grafana
+   - Vérifier que le datasource "Prometheus" existe et est accessible
+   - URL doit être : `http://prometheus:9090`
+
+2. **Tester une requête manuelle** :
+   - Aller dans Explore dans Grafana
+   - Sélectionner le datasource Prometheus
+   - Tester la requête : `claude_code_cost_usage_USD_total`
+   - Si ça fonctionne ici mais pas dans le dashboard, le dashboard a peut-être un problème
+
+3. **Réinitialiser Grafana** :
+   ```bash
+   docker-compose down
+   docker volume rm claude-monitoring_grafana-data
+   docker-compose up -d
+   ```
+   Cela rechargera le dashboard avec la configuration correcte.
+
 ### Port déjà utilisé
 
 Si le port 3000, 4317, ou 9090 est déjà utilisé, modifier dans `docker-compose.yml` :
@@ -211,29 +318,31 @@ docker-compose up -d
 
 ## 📊 Métriques disponibles
 
-### claude_code_cost_usage_total
+### claude_code_cost_usage_USD_total
 Coût en USD par modèle
 
-**Labels** : `model`, `session_id`, `user.account_uuid`
+**Labels** : `model`, `session_id`, `user_account_uuid`, `terminal_type`, etc.
 
-### claude_code_token_usage_total
+### claude_code_token_usage_tokens_total
 Tokens consommés
 
-**Labels** : `token_type` (input/output/cache), `model`
+**Labels** : `type` (input/output/cacheCreation/cacheRead), `model`
 
-### claude_code_session_count
+### claude_code_active_time_seconds_total
+Temps actif de la session en secondes
+
+**Labels** : `type` (user/cli), `session_id`, etc.
+
+### claude_code_session_count_total
 Nombre de sessions actives
 
-### claude_code_lines_modified_total
-Lignes de code ajoutées/supprimées
+### claude_code_lines_of_code_count_total
+Lignes de code modifiées
 
-**Labels** : `operation` (added/removed)
+**Labels** : `operation`, `session_id`, etc.
 
-### claude_code_git_commits_total
-Commits Git créés par Claude
-
-### claude_code_tool_decisions_total
-Décisions sur les permissions d'outils
+### claude_code_code_edit_tool_decision_total
+Décisions sur les permissions d'édition de code
 
 **Labels** : `decision` (accepted/rejected)
 
