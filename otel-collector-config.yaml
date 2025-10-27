@@ -1,0 +1,40 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 10s
+
+exporters:
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: claude_code
+    const_labels:
+      environment: local
+
+  logging:
+    loglevel: info
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus, logging]
+
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [logging]
+
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [logging]
