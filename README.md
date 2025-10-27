@@ -175,11 +175,6 @@ sum(increase(claude_code_cost_usage_USD_total[24h]))
 sum by (type) (claude_code_token_usage_tokens_total)
 ```
 
-**Sessions actives** :
-```promql
-claude_code_session_count_total
-```
-
 **Lignes de code modifiées (1h)** :
 ```promql
 sum(increase(claude_code_lines_of_code_count_total[1h]))
@@ -318,6 +313,10 @@ docker-compose up -d
 
 ## 📊 Métriques disponibles
 
+**Note :** Certaines métriques ne s'afficheront que lorsque l'action correspondante est effectuée :
+- `commit_count_total` : Seulement quand vous créez des commits
+- `lines_of_code_count_total` : Seulement quand du code est modifié
+
 ### claude_code_cost_usage_USD_total
 Coût en USD par modèle
 
@@ -333,13 +332,15 @@ Temps actif de la session en secondes
 
 **Labels** : `type` (user/cli), `session_id`, etc.
 
-### claude_code_session_count_total
-Nombre de sessions actives
-
 ### claude_code_lines_of_code_count_total
 Lignes de code modifiées
 
 **Labels** : `operation`, `session_id`, etc.
+
+### claude_code_commit_count_total
+Nombre de commits Git créés
+
+**Labels** : `session_id`, etc.
 
 ### claude_code_code_edit_tool_decision_total
 Décisions sur les permissions d'édition de code
